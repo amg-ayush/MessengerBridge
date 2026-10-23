@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+publish/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.db.lock
+*.user
+appsettings.*.local.json
+.env
