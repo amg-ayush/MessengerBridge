@@ -13,15 +13,15 @@ public static class SafeError
     public static string Describe(Exception exception) => exception switch
     {
         ApiException api when api.MigratedChatId is { } id =>
-            $"API {api.Status}; Telegram group migrated, set ChatId={id} (see README)",
-        ApiException api => $"API {api.Status}",
+            $"Ошибка API: {api.Status}; группа Telegram преобразована в супергруппу, задайте ChatId={id} (см. README)",
+        ApiException api => $"Ошибка API: {api.Status}",
         ConfigurationException config => config.Message,
         HttpRequestException { HttpRequestError: HttpRequestError.SecureConnectionError } =>
-            "TLS validation failed; verify the certificate chain (MAX: see README)",
-        HttpRequestException http => $"Network: {http.HttpRequestError}",
-        OperationCanceledException => "Request timed out or was cancelled",
-        System.Text.Json.JsonException => "Unexpected JSON response",
-        _ => exception.GetType().Name
+            "Ошибка проверки TLS; проверьте цепочку сертификатов (для MAX см. README)",
+        HttpRequestException http => $"Ошибка сети: {http.HttpRequestError}",
+        OperationCanceledException => "Время ожидания запроса истекло или запрос был отменён",
+        System.Text.Json.JsonException => "Неожиданный JSON-ответ API",
+        _ => $"Ошибка: {exception.GetType().Name}"
     };
 
     /// <summary>

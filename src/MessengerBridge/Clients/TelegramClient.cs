@@ -55,13 +55,13 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
         JsonElement webhook = await CallAsync("getWebhookInfo", new { }, ct);
         if (!string.IsNullOrEmpty(webhook.Text("url")))
         {
-            throw new ConfigurationException("Telegram has an active Webhook. Remove it explicitly before polling.");
+            throw new ConfigurationException("В Telegram настроен активный Webhook. Удалите его перед запуском опроса событий.");
         }
 
         JsonElement chat = await CallAsync("getChat", new { chat_id = options.Telegram.ChatId }, ct);
         if (chat.Text("type") is not ("group" or "supergroup"))
         {
-            throw new ConfigurationException("Telegram ChatId must point to a group/supergroup.");
+            throw new ConfigurationException("ChatId Telegram должен указывать на группу или супергруппу.");
         }
 
         JsonElement member = await CallAsync("getChatMember", new
@@ -71,7 +71,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
         }, ct);
         if (member.Text("status") is not ("administrator" or "creator"))
         {
-            throw new ConfigurationException("Make the Telegram bot a group administrator.");
+            throw new ConfigurationException("Назначьте бота Telegram администратором группы.");
         }
     }
 
@@ -117,7 +117,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
 
             if (message.TryGetProperty("migrate_to_chat_id", out JsonElement migrated))
             {
-                throw new ConfigurationException($"Telegram group migrated: set ChatId={migrated.GetInt64()} (see README).");
+                throw new ConfigurationException($"Группа Telegram преобразована в супергруппу: задайте ChatId={migrated.GetInt64()} (см. README).");
             }
             // Ignore all bots, anonymous admins/channel senders and service messages.
             if (message.TryGetProperty("sender_chat", out _) ||

@@ -8,7 +8,7 @@ namespace MessengerBridge.Clients;
 /// <param name="retryAfterSeconds">Запрошенная сервером задержка повтора в секундах либо null.</param>
 /// <param name="migratedChatId">Новый идентификатор Telegram-группы после миграции либо null.</param>
 public sealed class ApiException(int status, int? retryAfterSeconds = null, long? migratedChatId = null)
-    : Exception($"API status {status}")
+    : Exception($"Ошибка API: {status}")
 {
     /// <summary>
     /// Код ошибки API.

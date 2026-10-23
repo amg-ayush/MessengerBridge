@@ -83,7 +83,7 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                 PollBatch batch = await client.PollAsync(cursor, ct);
                 if (client.Platform == Platform.Max && batch.NextCursor is null && batch.Messages.Count > 0)
                 {
-                    throw new System.Text.Json.JsonException("MAX returned no continuation marker.");
+                    throw new System.Text.Json.JsonException("MAX не вернул маркер продолжения чтения событий.");
                 }
 
                 int count = await store.SaveBatchAsync(client.Platform, destinationChatId, batch, ct);

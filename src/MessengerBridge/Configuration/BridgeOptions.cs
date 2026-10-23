@@ -40,22 +40,22 @@ public sealed class BridgeOptions
     {
         if (PollTimeoutSeconds is < 1 or > 60)
         {
-            throw new InvalidOperationException("Bridge:PollTimeoutSeconds must be 1..60.");
+            throw new InvalidOperationException("Bridge:PollTimeoutSeconds должен быть в диапазоне от 1 до 60.");
         }
 
         if (SendIntervalMilliseconds < 3100)
         {
-            throw new InvalidOperationException("Bridge:SendIntervalMilliseconds must be >= 3100.");
+            throw new InvalidOperationException("Bridge:SendIntervalMilliseconds должен быть не меньше 3100.");
         }
 
         if (string.IsNullOrWhiteSpace(DatabasePath))
         {
-            throw new InvalidOperationException("Bridge:DatabasePath is required.");
+            throw new InvalidOperationException("Необходимо задать Bridge:DatabasePath.");
         }
 
         if (InitialMaxMarker < 0)
         {
-            throw new InvalidOperationException("Bridge:InitialMaxMarker must be >= 0 or null.");
+            throw new InvalidOperationException("Bridge:InitialMaxMarker должен быть неотрицательным числом или null.");
         }
 
         ValidateEndpoint(Telegram, "Telegram", requireTokens);
@@ -73,25 +73,25 @@ public sealed class BridgeOptions
     {
         if (options.ChatId == 0)
         {
-            throw new InvalidOperationException($"Bridge:{name}:ChatId is required (Int64).");
+            throw new InvalidOperationException($"Необходимо задать Bridge:{name}:ChatId — 64-разрядный идентификатор чата (Int64).");
         }
 
         if (requireToken && (string.IsNullOrWhiteSpace(options.Token) || options.Token.Any(char.IsWhiteSpace)))
         {
-            throw new InvalidOperationException($"Set Bridge:{name}:Token via User Secrets or environment.");
+            throw new InvalidOperationException($"Задайте Bridge:{name}:Token через User Secrets или переменные окружения.");
         }
 
         if (name == "Telegram" && requireToken &&
             !System.Text.RegularExpressions.Regex.IsMatch(options.Token, @"^\d+:[A-Za-z0-9_-]+$"))
         {
-            throw new InvalidOperationException("Bridge:Telegram:Token has an invalid format.");
+            throw new InvalidOperationException("Bridge:Telegram:Token имеет неверный формат.");
         }
 
         if (!string.IsNullOrWhiteSpace(options.ProxyUrl) &&
             (!Uri.TryCreate(options.ProxyUrl, UriKind.Absolute, out Uri? uri) ||
              uri.Scheme is not ("http" or "https" or "socks5")))
         {
-            throw new InvalidOperationException($"Bridge:{name}:ProxyUrl must be http, https or socks5.");
+            throw new InvalidOperationException($"Bridge:{name}:ProxyUrl должен быть адресом с протоколом http, https или socks5.");
         }
     }
 }

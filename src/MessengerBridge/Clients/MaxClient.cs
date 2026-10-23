@@ -57,26 +57,26 @@ public sealed class MaxClient : IMessengerClient, IDisposable
         JsonElement subscriptions = await GetAsync("subscriptions", ct);
         if (subscriptions.GetProperty("subscriptions").GetArrayLength() != 0)
         {
-            throw new ConfigurationException("MAX has active Webhook subscriptions. Remove them explicitly before polling.");
+            throw new ConfigurationException("В MAX настроены активные подписки Webhook. Удалите их перед запуском опроса событий.");
         }
 
         JsonElement chat = await GetAsync($"chats/{_options.Max.ChatId}", ct);
         if (chat.Text("type") != "chat")
         {
-            throw new ConfigurationException("MAX ChatId must point to a group chat.");
+            throw new ConfigurationException("ChatId MAX должен указывать на групповой чат.");
         }
 
         JsonElement member = await GetAsync($"chats/{_options.Max.ChatId}/members/me", ct);
         if (!member.TryGetProperty("is_admin", out JsonElement admin) || admin.ValueKind != JsonValueKind.True)
         {
-            throw new ConfigurationException("Make the MAX bot a group administrator.");
+            throw new ConfigurationException("Назначьте бота MAX администратором группы.");
         }
 
         if (!member.TryGetProperty("permissions", out JsonElement permissions) ||
             permissions.ValueKind != JsonValueKind.Array ||
             !permissions.EnumerateArray().Any(p => p.GetString() == "read_all_messages"))
         {
-            throw new ConfigurationException("Enable the MAX bot administrator permission read_all_messages.");
+            throw new ConfigurationException("Включите право администратора read_all_messages для бота MAX.");
         }
     }
 
@@ -141,7 +141,7 @@ public sealed class MaxClient : IMessengerClient, IDisposable
         JsonElement root = await ApiTransport.ReadAsync(await _http.PostAsJsonAsync(
             $"messages?chat_id={chatId}", new { text, notify = true }, ct), ct);
         return root.GetProperty("message").GetProperty("body").GetProperty("mid").GetString()
-            ?? throw new JsonException("Missing message ID.");
+            ?? throw new JsonException("В ответе API отсутствует идентификатор сообщения.");
     }
 
     /// <summary>
