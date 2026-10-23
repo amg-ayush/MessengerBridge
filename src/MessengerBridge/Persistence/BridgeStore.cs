@@ -160,7 +160,7 @@ public sealed class BridgeStore : IDisposable
 
     public Task<IReadOnlyList<string>> GetStatusAsync(CancellationToken ct = default) => LockedAsync(() =>
     {
-        List<string> lines = new List<string>();
+        List<string> lines = new();
         using SqliteCommand cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT source,status,COUNT(*) FROM outbox GROUP BY source,status ORDER BY source,status";
         using (SqliteDataReader reader = cmd.ExecuteReader())

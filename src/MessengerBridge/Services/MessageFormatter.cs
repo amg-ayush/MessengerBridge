@@ -12,7 +12,7 @@ public static class MessageFormatter
         if (author.Length > 100) author = author[..SafeLength(author, 100)];
         if (author.Length == 0) author = "Участник";
         string header = $"[{(source == Platform.Max ? "MAX" : "Telegram")}] {author}\n";
-        List<string> parts = new List<string>();
+        List<string> parts = new();
         string remaining = message.Text;
         while (remaining.Length > 0)
         {

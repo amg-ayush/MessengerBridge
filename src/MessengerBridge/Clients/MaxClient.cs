@@ -48,7 +48,7 @@ public sealed class MaxClient : IMessengerClient, IDisposable
 
     public static PollBatch ParseUpdates(JsonElement root, long chatId)
     {
-        List<IncomingMessage> messages = new List<IncomingMessage>();
+        List<IncomingMessage> messages = new();
         foreach (JsonElement update in root.GetProperty("updates").EnumerateArray())
         {
             if (update.Text("update_type") != "message_created" ||

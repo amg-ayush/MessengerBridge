@@ -32,7 +32,7 @@ public static class Program
             options.DatabasePath = Path.GetFullPath(options.DatabasePath, AppContext.BaseDirectory);
             Directory.CreateDirectory(Path.GetDirectoryName(options.DatabasePath)!);
             // Prevent two instances from delivering from the same local outbox.
-            using FileStream instanceLock = new FileStream(options.DatabasePath + ".lock", FileMode.OpenOrCreate,
+            using FileStream instanceLock = new(options.DatabasePath + ".lock", FileMode.OpenOrCreate,
                 FileAccess.ReadWrite, FileShare.None);
 
             builder.Logging.ClearProviders();
@@ -53,7 +53,7 @@ public static class Program
 
             if (mode == "--check")
             {
-                using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+                using CancellationTokenSource cts = new(TimeSpan.FromSeconds(90));
                 await host.Services.GetRequiredService<TelegramClient>().VerifyAsync(cts.Token);
                 Console.WriteLine("Telegram: OK (bot, group, administrator, no Webhook).");
                 await host.Services.GetRequiredService<MaxClient>().VerifyAsync(cts.Token);

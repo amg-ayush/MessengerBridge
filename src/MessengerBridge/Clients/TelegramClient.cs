@@ -47,7 +47,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
 
     public static PollBatch ParseUpdates(JsonElement updates, long chatId, long? cursor)
     {
-        List<IncomingMessage> messages = new List<IncomingMessage>();
+        List<IncomingMessage> messages = new();
         long? next = cursor;
         foreach (JsonElement update in updates.EnumerateArray())
         {

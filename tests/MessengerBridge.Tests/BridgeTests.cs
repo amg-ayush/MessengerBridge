@@ -69,21 +69,21 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task QueueAndCursorSurviveRestartAndRepeatedBatchDoesNotResend()
     {
-        PollBatch batch = new PollBatch(42, [new("message-1", -1, "Amgalan", "Пепси")]);
+        PollBatch batch = new(42, [new("message-1", -1, "Amgalan", "Пепси")]);
         long id;
-        using (BridgeStore store = new BridgeStore(Db))
+        using (BridgeStore store = new(Db))
         {
             Assert.Equal(1, await store.SaveBatchAsync(Platform.Telegram, -2, batch));
             id = (await store.GetNextAsync(Platform.Telegram))!.Id;
         }
-        using (BridgeStore store = new BridgeStore(Db))
+        using (BridgeStore store = new(Db))
         {
             Assert.Equal(42, await store.GetCursorAsync(Platform.Telegram));
             Assert.Equal(id, (await store.GetNextAsync(Platform.Telegram))!.Id);
             Assert.Equal(0, await store.SaveBatchAsync(Platform.Telegram, -2, batch));
             await store.MarkSentAsync(id, "target-1");
         }
-        using (BridgeStore store = new BridgeStore(Db))
+        using (BridgeStore store = new(Db))
         {
             Assert.Equal(0, await store.SaveBatchAsync(Platform.Telegram, -2, batch));
             Assert.Null(await store.GetNextAsync(Platform.Telegram));
@@ -93,9 +93,9 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task FailedBatchRollsBackBothQueueAndCursor()
     {
-        using BridgeStore store = new BridgeStore(Db);
+        using BridgeStore store = new(Db);
         await store.SaveBatchAsync(Platform.Max, -2, new PollBatch(100, []));
-        using (SqliteConnection connection = new SqliteConnection($"Data Source={Db};Pooling=False"))
+        using (SqliteConnection connection = new($"Data Source={Db};Pooling=False"))
         {
             connection.Open();
             using SqliteCommand cmd = connection.CreateCommand();
@@ -114,7 +114,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task RetryKeepsHeadOfQueueAndFailureCanBeExplicitlyRequeued()
     {
-        using BridgeStore store = new BridgeStore(Db);
+        using BridgeStore store = new(Db);
         await store.SaveBatchAsync(Platform.Max, -2,
             new PollBatch(1, [new("1", -1, "A", "first"), new("2", -1, "A", "second")]));
         OutboxItem first = (await store.GetNextAsync(Platform.Max))!;
@@ -134,7 +134,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task IndependentDirectionsAndSourceChatIdsDoNotCollide()
     {
-        using BridgeStore store = new BridgeStore(Db);
+        using BridgeStore store = new(Db);
         await Task.WhenAll(
             store.SaveBatchAsync(Platform.Max, -2, new PollBatch(10, [new("1", -1, "A", "a")])),
             store.SaveBatchAsync(Platform.Telegram, -1, new PollBatch(20, [new("1", -2, "B", "b")])));
@@ -147,7 +147,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task TelegramHonorsRetryAfterWithoutExposingResponseOrToken()
     {
-        using HttpResponseMessage response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        using HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
         {
             Content = new StringContent("""
                 {"ok":false,"description":"sensitive-value","parameters":{"retry_after":35}}
@@ -163,7 +163,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task MigrationResponseReportsInt64NewChatId()
     {
-        using HttpResponseMessage response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+        using HttpResponseMessage response = new(HttpStatusCode.BadRequest)
         {
             Content = new StringContent("""
                 {"ok":false,"parameters":{"migrate_to_chat_id":-1005369085414}}
@@ -177,8 +177,8 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task TelegramPollAndSendHaveCorrectWireShapeAndPlainText()
     {
-        List<(string Path, JsonElement Body)> requests = new List<(string Path, JsonElement Body)>();
-        using FakeHandler handler = new FakeHandler(async request =>
+        List<(string Path, JsonElement Body)> requests = new();
+        using FakeHandler handler = new(async request =>
         {
             requests.Add((request.RequestUri!.AbsolutePath,
                 Json(await request.Content!.ReadAsStringAsync())));
@@ -188,7 +188,7 @@ public sealed class BridgeTests : IDisposable
                     ? "{\"ok\":true,\"result\":[]}" : "{\"ok\":true,\"result\":{\"message_id\":7}}")
             };
         });
-        using TelegramClient client = new TelegramClient(new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/") },
+        using TelegramClient client = new(new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/") },
             new BridgeOptions { Telegram = new EndpointOptions { Token = "1:fake", ChatId = -5369085414 } });
         await client.PollAsync(123, default);
         Assert.Equal(123, requests[0].Body.GetProperty("offset").GetInt64());
@@ -202,8 +202,8 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task MaxUsesAuthorizationHeaderAndPersistedMarker()
     {
-        List<string> requests = new List<string>();
-        using FakeHandler handler = new FakeHandler(request =>
+        List<string> requests = new();
+        using FakeHandler handler = new(request =>
         {
             requests.Add(request.RequestUri!.PathAndQuery);
             Assert.Equal("fake-token", Assert.Single(request.Headers.GetValues("Authorization")));
@@ -212,7 +212,7 @@ public sealed class BridgeTests : IDisposable
                 : "{\"message\":{\"body\":{\"mid\":\"mid.sent\"}}}";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(result) });
         });
-        using MaxClient client = new MaxClient(new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/") },
+        using MaxClient client = new(new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/") },
             new BridgeOptions { Max = new EndpointOptions { Token = "fake-token", ChatId = -80442349966802 } });
         Assert.Equal(83041, (await client.PollAsync(83040, default)).NextCursor);
         Assert.Contains("marker=83040", requests[0]);

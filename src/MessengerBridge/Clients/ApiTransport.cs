@@ -8,7 +8,7 @@ public static class ApiTransport
 {
     public static HttpClient Create(EndpointOptions options, Uri baseAddress)
     {
-        HttpClientHandler handler = new HttpClientHandler
+        HttpClientHandler handler = new()
         {
             AllowAutoRedirect = false,
             // Deliberate: ignore environment/system proxies when ProxyUrl is blank.
