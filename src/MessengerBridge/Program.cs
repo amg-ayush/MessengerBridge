@@ -19,7 +19,7 @@ public static class Program
                 Console.Error.WriteLine("Usage: MessengerBridge [--check | --status | --retry-failed]");
                 return 2;
             }
-            var mode = args.FirstOrDefault();
+            string? mode = args.FirstOrDefault();
             // Config and data resolve beside the compiled app, independent of the current directory.
             HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
@@ -32,7 +32,7 @@ public static class Program
             options.DatabasePath = Path.GetFullPath(options.DatabasePath, AppContext.BaseDirectory);
             Directory.CreateDirectory(Path.GetDirectoryName(options.DatabasePath)!);
             // Prevent two instances from delivering from the same local outbox.
-            using var instanceLock = new FileStream(options.DatabasePath + ".lock", FileMode.OpenOrCreate,
+            using FileStream instanceLock = new FileStream(options.DatabasePath + ".lock", FileMode.OpenOrCreate,
                 FileAccess.ReadWrite, FileShare.None);
 
             builder.Logging.ClearProviders();
@@ -53,7 +53,7 @@ public static class Program
 
             if (mode == "--check")
             {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+                using CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
                 await host.Services.GetRequiredService<TelegramClient>().VerifyAsync(cts.Token);
                 Console.WriteLine("Telegram: OK (bot, group, administrator, no Webhook).");
                 await host.Services.GetRequiredService<MaxClient>().VerifyAsync(cts.Token);
@@ -63,14 +63,14 @@ public static class Program
             BridgeStore store = host.Services.GetRequiredService<BridgeStore>();
             if (mode == "--retry-failed")
             {
-                var count = await store.RetryFailedAsync(options.Telegram.ChatId, options.Max.ChatId);
+                int count = await store.RetryFailedAsync(options.Telegram.ChatId, options.Max.ChatId);
                 Console.WriteLine($"Requeued {count} failed message part(s) using current ChatId settings.");
                 return 0;
             }
             if (mode == "--status")
             {
                 IReadOnlyList<string> status = await store.GetStatusAsync();
-                foreach (var line in status) Console.WriteLine(line);
+                foreach (string line in status) Console.WriteLine(line);
                 if (status.Count == 0) Console.WriteLine("Queue is empty; no cursors saved yet.");
                 return 0;
             }

@@ -47,11 +47,11 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
 
     public static PollBatch ParseUpdates(JsonElement updates, long chatId, long? cursor)
     {
-        var messages = new List<IncomingMessage>();
-        var next = cursor;
+        List<IncomingMessage> messages = new List<IncomingMessage>();
+        long? next = cursor;
         foreach (JsonElement update in updates.EnumerateArray())
         {
-            var candidate = checked(update.GetProperty("update_id").GetInt64() + 1);
+            long candidate = checked(update.GetProperty("update_id").GetInt64() + 1);
             next = next is { } value ? Math.Max(value, candidate) : candidate;
             if (!update.TryGetProperty("message", out JsonElement message) ||
                 message.GetProperty("chat").GetProperty("id").GetInt64() != chatId) continue;
@@ -60,7 +60,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
             // Ignore all bots, anonymous admins/channel senders and service messages.
             if (message.TryGetProperty("sender_chat", out _) ||
                 !message.TryGetProperty("from", out JsonElement sender) || sender.IsBot()) continue;
-            var text = message.Text("text");
+            string? text = message.Text("text");
             if (string.IsNullOrWhiteSpace(text)) continue;
             messages.Add(new IncomingMessage(
                 message.GetProperty("message_id").GetInt64().ToString(CultureInfo.InvariantCulture),

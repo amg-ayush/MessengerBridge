@@ -8,7 +8,7 @@ public static class ApiTransport
 {
     public static HttpClient Create(EndpointOptions options, Uri baseAddress)
     {
-        var handler = new HttpClientHandler
+        HttpClientHandler handler = new HttpClientHandler
         {
             AllowAutoRedirect = false,
             // Deliberate: ignore environment/system proxies when ProxyUrl is blank.
@@ -22,17 +22,17 @@ public static class ApiTransport
     {
         using (response)
         {
-            var json = await response.Content.ReadAsStringAsync(ct);
+            string json = await response.Content.ReadAsStringAsync(ct);
             if (!response.IsSuccessStatusCode)
             {
-                var retry = response.Headers.RetryAfter?.Delta?.TotalSeconds;
+                double? retry = response.Headers.RetryAfter?.Delta?.TotalSeconds;
                 if (retry is null && response.Headers.RetryAfter?.Date is { } date)
                     retry = Math.Max(0, (date - DateTimeOffset.UtcNow).TotalSeconds);
                 int? seconds = retry is { } value ? (int)Math.Ceiling(Math.Min(value, int.MaxValue)) : null;
                 long? migrate = null;
                 try
                 {
-                    using var error = JsonDocument.Parse(json);
+                    using JsonDocument error = JsonDocument.Parse(json);
                     if (error.RootElement.TryGetProperty("parameters", out JsonElement parameters))
                     {
                         if (parameters.TryGetProperty("retry_after", out JsonElement after)) seconds = after.GetInt32();
@@ -42,7 +42,7 @@ public static class ApiTransport
                 catch (JsonException) { }
                 throw new ApiException((int)response.StatusCode, seconds, migrate);
             }
-            using var doc = JsonDocument.Parse(json);
+            using JsonDocument doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone();
         }
     }

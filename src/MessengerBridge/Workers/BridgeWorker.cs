@@ -36,8 +36,8 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
 
     private async Task ReceiveAsync(IMessengerClient client, long destinationChatId, CancellationToken ct)
     {
-        var verified = false;
-        var failures = 0;
+        bool verified = false;
+        int failures = 0;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -48,12 +48,12 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                     verified = true;
                     logger.LogInformation("{Platform}: bot, group and polling checks passed.", client.Platform);
                 }
-                var cursor = await store.GetCursorAsync(client.Platform, ct);
+                long? cursor = await store.GetCursorAsync(client.Platform, ct);
                 if (client.Platform == Platform.Max) cursor ??= options.InitialMaxMarker;
                 PollBatch batch = await client.PollAsync(cursor, ct);
                 if (client.Platform == Platform.Max && batch.NextCursor is null && batch.Messages.Count > 0)
                     throw new System.Text.Json.JsonException("MAX returned no continuation marker.");
-                var count = await store.SaveBatchAsync(client.Platform, destinationChatId, batch, ct);
+                int count = await store.SaveBatchAsync(client.Platform, destinationChatId, batch, ct);
                 failures = 0;
                 if (count > 0) logger.LogInformation("{Platform}: queued {Count} message part(s).", client.Platform, count);
                 // Prevent busy polling if the API returns immediately (including filtered bot events).
@@ -93,7 +93,7 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                     await Task.Delay(500, ct);
                     continue;
                 }
-                var wait = item.NextAttemptAt - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                long wait = item.NextAttemptAt - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 if (wait > 0)
                 {
                     await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(wait, 1000)), ct);
@@ -108,7 +108,7 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                 catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or
                     ApiException or System.Text.Json.JsonException)
                 {
-                    var permanent = ex is ApiException { Transient: false };
+                    bool permanent = ex is ApiException { Transient: false };
                     TimeSpan delay = SafeError.Backoff(item.Attempts + 1, (ex as ApiException)?.RetryAfterSeconds);
                     await store.MarkErrorAsync(item.Id, SafeError.Describe(ex), delay, permanent, ct);
                     logger.LogWarning("{Source} -> {Target}, queue #{Id}: {Reason}; {Action}.",

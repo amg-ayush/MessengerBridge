@@ -41,25 +41,25 @@ public sealed class MaxClient : IMessengerClient, IDisposable
 
     public async Task<PollBatch> PollAsync(long? cursor, CancellationToken ct)
     {
-        var marker = cursor is { } value ? "&marker=" + value.ToString(CultureInfo.InvariantCulture) : "";
+        string marker = cursor is { } value ? "&marker=" + value.ToString(CultureInfo.InvariantCulture) : "";
         JsonElement root = await GetAsync($"updates?limit=100&timeout={_options.PollTimeoutSeconds}&types=message_created{marker}", ct);
         return ParseUpdates(root, _options.Max.ChatId);
     }
 
     public static PollBatch ParseUpdates(JsonElement root, long chatId)
     {
-        var messages = new List<IncomingMessage>();
+        List<IncomingMessage> messages = new List<IncomingMessage>();
         foreach (JsonElement update in root.GetProperty("updates").EnumerateArray())
         {
             if (update.Text("update_type") != "message_created" ||
                 !update.TryGetProperty("message", out JsonElement message) ||
                 !message.GetProperty("recipient").TryGetProperty("chat_id", out JsonElement recipientChat) ||
-                recipientChat.ValueKind != JsonValueKind.Number || !recipientChat.TryGetInt64(out var recipientId) ||
+                recipientChat.ValueKind != JsonValueKind.Number || !recipientChat.TryGetInt64(out long recipientId) ||
                 recipientId != chatId ||
                 !message.TryGetProperty("sender", out JsonElement sender) || sender.IsBot()) continue;
             JsonElement body = message.GetProperty("body");
-            var text = body.Text("text");
-            var mid = body.Text("mid");
+            string? text = body.Text("text");
+            string? mid = body.Text("mid");
             if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(mid)) continue;
             messages.Add(new IncomingMessage(mid, chatId, sender.Author(), text));
         }

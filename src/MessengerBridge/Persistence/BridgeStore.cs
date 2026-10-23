@@ -10,7 +10,7 @@ public sealed class BridgeStore : IDisposable
 
     public BridgeStore(string path)
     {
-        var fullPath = Path.GetFullPath(path);
+        string fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         _connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -66,11 +66,11 @@ public sealed class BridgeStore : IDisposable
         CancellationToken ct = default) => LockedAsync(() =>
     {
         using SqliteTransaction transaction = _connection.BeginTransaction();
-        var inserted = 0;
+        int inserted = 0;
         foreach (IncomingMessage message in batch.Messages)
         {
             IReadOnlyList<string> parts = MessageFormatter.Format(source, message);
-            for (var part = 0; part < parts.Count; part++)
+            for (int part = 0; part < parts.Count; part++)
             {
                 using SqliteCommand cmd = _connection.CreateCommand();
                 cmd.Transaction = transaction;
@@ -160,7 +160,7 @@ public sealed class BridgeStore : IDisposable
 
     public Task<IReadOnlyList<string>> GetStatusAsync(CancellationToken ct = default) => LockedAsync(() =>
     {
-        var lines = new List<string>();
+        List<string> lines = new List<string>();
         using SqliteCommand cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT source,status,COUNT(*) FROM outbox GROUP BY source,status ORDER BY source,status";
         using (SqliteDataReader reader = cmd.ExecuteReader())
