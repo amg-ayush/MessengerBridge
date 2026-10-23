@@ -39,10 +39,3 @@ public sealed class BridgeOptions
             throw new InvalidOperationException($"Bridge:{name}:ProxyUrl must be http, https or socks5.");
     }
 }
-
-public sealed class EndpointOptions
-{
-    public string Token { get; set; } = "";
-    public long ChatId { get; set; }
-    public string ProxyUrl { get; set; } = "";
-}
