@@ -1,10 +1,23 @@
 namespace MessengerBridge.Services;
 
+/// <summary>
+/// Добавляет источник и автора, разделяя длинные сообщения на части для отправки.
+/// </summary>
 public static class MessageFormatter
 {
     // Leave room below both API limits and never split UTF-16 surrogate pairs.
+    /// <summary>
+    /// Максимальная длина части с заголовком в кодовых единицах UTF-16.
+    /// </summary>
     public const int MaxLength = 3500;
 
+    /// <summary>
+    /// Формирует части сообщения с заголовком автора без разрыва суррогатных пар UTF-16.
+    /// </summary>
+    /// <param name="source">Платформа, из которой получено сообщение.</param>
+    /// <param name="message">Исходное сообщение с именем автора и текстом.</param>
+    /// <returns>Упорядоченные части длиной не более MaxLength; пустой список для пустого текста.</returns>
+    /// <remarks>Имя автора нормализуется и ограничивается 100 кодовыми единицами UTF-16. Заголовок повторяется в каждой части; границы графем не гарантируются.</remarks>
     public static IReadOnlyList<string> Format(Platform source, IncomingMessage message)
     {
         string author = string.Join(" ", message.Author.Split((char[]?)null,
@@ -31,6 +44,12 @@ public static class MessageFormatter
         return parts;
     }
 
+    /// <summary>
+    /// Выбирает длину префикса, не разрывающую суррогатную пару UTF-16.
+    /// </summary>
+    /// <param name="text">Строка, из которой выделяется префикс.</param>
+    /// <param name="limit">Максимально допустимое число кодовых единиц UTF-16.</param>
+    /// <returns>Длина префикса в пределах лимита и длины строки.</returns>
     private static int SafeLength(string text, int limit)
     {
         int length = Math.Min(text.Length, limit);

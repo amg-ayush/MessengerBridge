@@ -6,10 +6,15 @@ using MessengerBridge.Workers;
 namespace MessengerBridge;
 
 /// <summary>
-/// Программа
+/// Настраивает и запускает мост либо выполняет выбранную команду обслуживания.
 /// </summary>
 public static class Program
 {
+    /// <summary>
+    /// Выполняет запуск приложения, проверку подключений или обслуживание очереди.
+    /// </summary>
+    /// <param name="args">Аргументы командной строки: --check, --status, --retry-failed либо пустой список.</param>
+    /// <returns>Код завершения: 0 при успехе, 1 при ошибке выполнения, 2 при неверных аргументах.</returns>
     private static async Task<int> Main(string[] args)
     {
         try

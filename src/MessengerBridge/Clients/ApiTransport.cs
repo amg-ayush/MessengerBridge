@@ -4,8 +4,17 @@ using MessengerBridge.Configuration;
 
 namespace MessengerBridge.Clients;
 
+/// <summary>
+/// Создаёт HTTP-клиенты и читает ответы API с безопасной обработкой ошибок.
+/// </summary>
 public static class ApiTransport
 {
+    /// <summary>
+    /// Создаёт HTTP-клиент с явной настройкой прокси, проверкой TLS и запретом перенаправлений.
+    /// </summary>
+    /// <param name="options">Параметры подключения; пустой адрес прокси отключает также системный прокси.</param>
+    /// <param name="baseAddress">Базовый адрес API мессенджера.</param>
+    /// <returns>HTTP-клиент с тайм-аутом 90 секунд, который должен освободить вызывающий код.</returns>
     public static HttpClient Create(EndpointOptions options, Uri baseAddress)
     {
         HttpClientHandler handler = new()
@@ -22,6 +31,14 @@ public static class ApiTransport
         return new HttpClient(handler) { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(90) };
     }
 
+    /// <summary>
+    /// Читает JSON-ответ и преобразует ошибку API в исключение без чувствительных данных.
+    /// </summary>
+    /// <param name="response">HTTP-ответ, который будет освобождён после чтения.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Копия корневого JSON-элемента, независимая от времени жизни документа.</returns>
+    /// <exception cref="ApiException">HTTP-статус указывает на неуспешный ответ; сведения о повторе и миграции извлекаются при наличии.</exception>
+    /// <exception cref="JsonException">Успешный ответ не содержит корректного JSON.</exception>
     public static async Task<JsonElement> ReadAsync(HttpResponseMessage response, CancellationToken ct)
     {
         using (response)

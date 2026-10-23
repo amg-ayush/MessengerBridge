@@ -3,11 +3,25 @@ using Microsoft.Data.Sqlite;
 
 namespace MessengerBridge.Persistence;
 
+/// <summary>
+/// Хранит курсоры чтения и очередь доставки в SQLite, последовательно выполняя операции с соединением.
+/// </summary>
+/// <remarks>Постановка сообщений и обновление курсора выполняются одной транзакцией. Дедупликация защищает очередь, но не исключает повтор после неопределённого результата сетевой отправки.</remarks>
 public sealed class BridgeStore : IDisposable
 {
+    /// <summary>
+    /// Единственное соединение с локальной SQLite-базой.
+    /// </summary>
     private readonly SqliteConnection _connection;
+    /// <summary>
+    /// Синхронизирует доступ параллельных обработчиков к соединению.
+    /// </summary>
     private readonly SemaphoreSlim _gate = new(1);
 
+    /// <summary>
+    /// Открывает SQLite-базу, создаёт каталог и таблицы, включает WAL и полную синхронизацию записи.
+    /// </summary>
+    /// <param name="path">Путь к файлу базы данных.</param>
     public BridgeStore(string path)
     {
         string fullPath = Path.GetFullPath(path);
@@ -48,6 +62,13 @@ public sealed class BridgeStore : IDisposable
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Выполняет синхронную операцию с базой под общей асинхронной блокировкой.
+    /// </summary>
+    /// <typeparam name="T">Тип результата операции.</typeparam>
+    /// <param name="action">Операция, выполняемая после захвата блокировки.</param>
+    /// <param name="ct">Токен отмены ожидания блокировки; не прерывает уже начатый SQL-запрос.</param>
+    /// <returns>Результат переданной операции.</returns>
     private async Task<T> LockedAsync<T>(Func<T> action, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
@@ -55,6 +76,12 @@ public sealed class BridgeStore : IDisposable
         finally { _gate.Release(); }
     }
 
+    /// <summary>
+    /// Читает сохранённый курсор заданной платформы.
+    /// </summary>
+    /// <param name="source">Платформа, для которой запрашивается курсор.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Сохранённый курсор либо null, если чтение ещё не фиксировалось.</returns>
     public Task<long?> GetCursorAsync(Platform source, CancellationToken ct = default) => LockedAsync(() =>
     {
         using SqliteCommand cmd = _connection.CreateCommand();
@@ -64,6 +91,15 @@ public sealed class BridgeStore : IDisposable
     }, ct);
 
     // Enqueue and cursor advancement commit together, before acknowledging updates remotely.
+    /// <summary>
+    /// Атомарно ставит части сообщений в очередь и сохраняет курсор следующего чтения.
+    /// </summary>
+    /// <param name="source">Платформа, из которой получено сообщение.</param>
+    /// <param name="destinationChatId">Идентификатор целевого группового чата.</param>
+    /// <param name="batch">Порция сообщений и следующий курсор.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Число новых частей, добавленных в очередь без учёта дубликатов.</returns>
+    /// <remarks>Повторы определяются по платформе, исходному чату, идентификатору сообщения и номеру части. При ошибке транзакция откатывает и очередь, и курсор.</remarks>
     public Task<int> SaveBatchAsync(Platform source, long destinationChatId, PollBatch batch,
         CancellationToken ct = default) => LockedAsync(() =>
     {
@@ -106,6 +142,13 @@ public sealed class BridgeStore : IDisposable
         return inserted;
     }, ct);
 
+    /// <summary>
+    /// Возвращает самую раннюю ожидающую часть в одном направлении, не извлекая её из очереди.
+    /// </summary>
+    /// <param name="source">Платформа, из которой получено сообщение.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Первая ожидающая часть либо null, если очередь пуста.</returns>
+    /// <remarks>Отложенная первая часть блокирует следующие; время NextAttemptAt проверяет отправитель.</remarks>
     public Task<OutboxItem?> GetNextAsync(Platform source, CancellationToken ct = default) => LockedAsync(() =>
     {
         using SqliteCommand cmd = _connection.CreateCommand();
@@ -119,6 +162,13 @@ public sealed class BridgeStore : IDisposable
             reader.GetString(2), reader.GetInt32(3), reader.GetInt64(4)) : null;
     }, ct);
 
+    /// <summary>
+    /// Отмечает часть доставленной и сохраняет идентификатор сообщения получателя.
+    /// </summary>
+    /// <param name="id">Идентификатор записи очереди.</param>
+    /// <param name="targetId">Идентификатор отправленного сообщения в целевом мессенджере.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Число обновлённых записей.</returns>
     public Task<int> MarkSentAsync(long id, string targetId, CancellationToken ct = default) => LockedAsync(() =>
     {
         using SqliteCommand cmd = _connection.CreateCommand();
@@ -131,6 +181,15 @@ public sealed class BridgeStore : IDisposable
         return cmd.ExecuteNonQuery();
     }, ct);
 
+    /// <summary>
+    /// Регистрирует ошибку отправки, увеличивает число попыток и назначает повтор либо статус failed.
+    /// </summary>
+    /// <param name="id">Идентификатор записи очереди.</param>
+    /// <param name="safeError">Описание ошибки без секретов и текста переписки.</param>
+    /// <param name="delay">Пауза до следующей разрешённой попытки.</param>
+    /// <param name="permanent">true для статуса failed; false оставляет запись в pending.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Число обновлённых записей.</returns>
     public Task<int> MarkErrorAsync(long id, string safeError, TimeSpan delay, bool permanent,
         CancellationToken ct = default) => LockedAsync(() =>
     {
@@ -146,6 +205,14 @@ public sealed class BridgeStore : IDisposable
         return cmd.ExecuteNonQuery();
     }, ct);
 
+    /// <summary>
+    /// Возвращает все failed-записи в очередь с текущими адресатами из конфигурации.
+    /// </summary>
+    /// <param name="telegramChatId">Текущий идентификатор группы Telegram.</param>
+    /// <param name="maxChatId">Текущий идентификатор группы MAX.</param>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Число повторно поставленных в очередь частей.</returns>
+    /// <remarks>Время следующей попытки и последняя ошибка сбрасываются; накопленное число попыток сохраняется.</remarks>
     public Task<int> RetryFailedAsync(long telegramChatId, long maxChatId, CancellationToken ct = default) =>
         LockedAsync(() =>
         {
@@ -160,6 +227,11 @@ public sealed class BridgeStore : IDisposable
             return cmd.ExecuteNonQuery();
         }, ct);
 
+    /// <summary>
+    /// Получает счётчики состояний очереди и сохранённые курсоры без текста сообщений.
+    /// </summary>
+    /// <param name="ct">Токен отмены операции.</param>
+    /// <returns>Строки состояния, пригодные для вывода в консоль.</returns>
     public Task<IReadOnlyList<string>> GetStatusAsync(CancellationToken ct = default) => LockedAsync(() =>
     {
         List<string> lines = [];
@@ -185,6 +257,9 @@ public sealed class BridgeStore : IDisposable
         return (IReadOnlyList<string>)lines;
     }, ct);
 
+    /// <summary>
+    /// Освобождает соединение SQLite и семафор доступа к базе данных.
+    /// </summary>
     public void Dispose()
     {
         _connection.Dispose();

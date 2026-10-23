@@ -1,3 +1,13 @@
 namespace MessengerBridge;
 
-public enum Platform { Telegram, Max }
+/// <summary>
+/// Платформа отправителя или получателя сообщения.
+/// </summary>
+public enum Platform
+{
+    /// <summary>Мессенджер Telegram.</summary>
+    Telegram,
+
+    /// <summary>Мессенджер MAX.</summary>
+    Max
+}

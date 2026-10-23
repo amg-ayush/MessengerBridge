@@ -1,15 +1,41 @@
 namespace MessengerBridge.Configuration;
 
+/// <summary>
+/// Настройки двух мессенджеров, локального хранилища и режима работы моста.
+/// </summary>
 public sealed class BridgeOptions
 {
+    /// <summary>
+    /// Настройки подключения к Telegram и идентификатор исходной группы.
+    /// </summary>
     public EndpointOptions Telegram { get; set; } = new();
+    /// <summary>
+    /// Настройки подключения к MAX и идентификатор исходной группы.
+    /// </summary>
     public EndpointOptions Max { get; set; } = new();
+    /// <summary>
+    /// Путь к SQLite; относительный путь разрешается от каталога сборки приложения.
+    /// </summary>
     public string DatabasePath { get; set; } = "data/bridge.db";
+    /// <summary>
+    /// Тайм-аут ожидания событий long polling в секундах, от 1 до 60.
+    /// </summary>
     public int PollTimeoutSeconds { get; set; } = 30;
+    /// <summary>
+    /// Начальный marker MAX при отсутствии сохранённого курсора; null оставляет выбор API.
+    /// </summary>
     public long? InitialMaxMarker { get; set; }
     // Conservative group flood limit; each destination has its own sender.
+    /// <summary>
+    /// Минимальная пауза между отправками в одном направлении, не менее 3100 миллисекунд.
+    /// </summary>
     public int SendIntervalMilliseconds { get; set; } = 3100;
 
+    /// <summary>
+    /// Проверяет допустимость общих настроек и параметров обоих мессенджеров.
+    /// </summary>
+    /// <param name="requireTokens">Нужно ли проверять наличие и формат токенов ботов.</param>
+    /// <exception cref="InvalidOperationException">Настройки содержат недопустимое значение или не содержат обязательного параметра.</exception>
     public void Validate(bool requireTokens)
     {
         if (PollTimeoutSeconds is < 1 or > 60)
@@ -36,6 +62,13 @@ public sealed class BridgeOptions
         ValidateEndpoint(Max, "Max", requireTokens);
     }
 
+    /// <summary>
+    /// Проверяет чат, адрес прокси и при необходимости токен одного мессенджера.
+    /// </summary>
+    /// <param name="options">Проверяемые настройки подключения.</param>
+    /// <param name="name">Имя раздела конфигурации: Telegram или Max.</param>
+    /// <param name="requireToken">Нужно ли проверять токен бота.</param>
+    /// <exception cref="InvalidOperationException">Идентификатор чата, адрес прокси или обязательный токен некорректны.</exception>
     private static void ValidateEndpoint(EndpointOptions options, string name, bool requireToken)
     {
         if (options.ChatId == 0)

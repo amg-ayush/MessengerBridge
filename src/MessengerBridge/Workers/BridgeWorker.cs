@@ -4,9 +4,23 @@ using MessengerBridge.Persistence;
 
 namespace MessengerBridge.Workers;
 
+/// <summary>
+/// Параллельно получает сообщения двух мессенджеров и отправляет сохранённые части в противоположные чаты.
+/// </summary>
+/// <param name="telegram">Клиент Telegram.</param>
+/// <param name="max">Клиент MAX.</param>
+/// <param name="store">Общее хранилище курсоров и очереди.</param>
+/// <param name="options">Настройки чатов, начального marker и частоты отправки.</param>
+/// <param name="logger">Журнал событий без содержимого переписки.</param>
+/// <param name="lifetime">Управление остановкой приложения при неисправимой ошибке.</param>
 public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeStore store,
     BridgeOptions options, ILogger<BridgeWorker> logger, IHostApplicationLifetime lifetime) : BackgroundService
 {
+    /// <summary>
+    /// Запускает два цикла приёма и два независимых цикла отправки до остановки приложения.
+    /// </summary>
+    /// <param name="stoppingToken">Токен остановки фонового сервиса.</param>
+    /// <returns>Задача, завершающаяся после остановки всех циклов.</returns>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -26,6 +40,11 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
         }
     }
 
+    /// <summary>
+    /// Записывает безопасную причину неисправимой ошибки и запрашивает остановку с кодом 1.
+    /// </summary>
+    /// <param name="platform">Платформа, при обработке которой возникла ошибка.</param>
+    /// <param name="ex">Причина остановки.</param>
     private void StopForConfiguration(Platform platform, Exception ex)
     {
         logger.LogCritical("{Platform}: {Reason}. Fix configuration and restart.",
@@ -34,6 +53,13 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
         lifetime.StopApplication();
     }
 
+    /// <summary>
+    /// Проверяет подключение, получает события и сохраняет их вместе с курсором, повторяя временные ошибки.
+    /// </summary>
+    /// <param name="client">Клиент исходной платформы.</param>
+    /// <param name="destinationChatId">Идентификатор целевого группового чата.</param>
+    /// <param name="ct">Токен остановки цикла приёма.</param>
+    /// <returns>Задача цикла приёма до отмены или неисправимой ошибки.</returns>
     private async Task ReceiveAsync(IMessengerClient client, long destinationChatId, CancellationToken ct)
     {
         bool verified = false;
@@ -91,6 +117,14 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
         }
     }
 
+    /// <summary>
+    /// Последовательно доставляет очередь одного направления с учётом повторов и ограничения частоты.
+    /// </summary>
+    /// <param name="source">Платформа, из которой получено сообщение.</param>
+    /// <param name="destination">Клиент целевого мессенджера.</param>
+    /// <param name="ct">Токен остановки цикла отправки.</param>
+    /// <returns>Задача цикла отправки до отмены или неисправимой ошибки.</returns>
+    /// <remarks>Ошибка записи результата в SQLite после успешной отправки останавливает цикл, чтобы избежать немедленной повторной отправки.</remarks>
     private async Task RelayAsync(Platform source, IMessengerClient destination, CancellationToken ct)
     {
         try

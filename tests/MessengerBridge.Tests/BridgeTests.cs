@@ -10,11 +10,23 @@ using Xunit;
 
 namespace MessengerBridge.Tests;
 
+/// <summary>
+/// Проверяет разбор событий, форматирование текста, сохранность очереди и формат HTTP-запросов.
+/// </summary>
 public sealed class BridgeTests : IDisposable
 {
+    /// <summary>
+    /// Уникальный временный каталог базы данных текущего теста.
+    /// </summary>
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "bridge-tests-" + Guid.NewGuid());
+    /// <summary>
+    /// Путь к SQLite-базе текущего теста.
+    /// </summary>
     private string Db => Path.Combine(_directory, "test.db");
 
+    /// <summary>
+    /// Проверяет фильтрацию событий Telegram с продвижением offset по всем полученным событиям.
+    /// </summary>
     [Fact]
     public void TelegramFiltersBotsOtherGroupsAndAnonymousSendersButAdvancesOffset()
     {
@@ -35,6 +47,9 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal("Amgalan", message.Author);
     }
 
+    /// <summary>
+    /// Проверяет 64-разрядный идентификатор группы MAX и исключение сообщений ботов и чужих чатов.
+    /// </summary>
     [Fact]
     public void MaxParsesInt64ChatAndSkipsBotEchoes()
     {
@@ -51,6 +66,9 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal("Amgalan Ayush", Assert.Single(batch.Messages).Author);
     }
 
+    /// <summary>
+    /// Проверяет ограничение длины частей и сохранение Unicode-текста без разрыва суррогатных пар.
+    /// </summary>
     [Fact]
     public void LongUnicodeMessageIsSplitWithoutLosingTextOrBreakingSurrogates()
     {
@@ -66,6 +84,10 @@ public sealed class BridgeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Проверяет сохранение очереди и курсора после переоткрытия базы и дедупликацию повторных порций.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task QueueAndCursorSurviveRestartAndRepeatedBatchDoesNotResend()
     {
@@ -90,6 +112,10 @@ public sealed class BridgeTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Проверяет откат очереди и курсора одной транзакцией при ошибке вставки сообщения.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task FailedBatchRollsBackBothQueueAndCursor()
     {
@@ -111,6 +137,10 @@ public sealed class BridgeTests : IDisposable
         Assert.Null(await store.GetNextAsync(Platform.Max));
     }
 
+    /// <summary>
+    /// Проверяет порядок очереди при отложенном повторе и возврат failed-записи с обновлённым адресатом.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task RetryKeepsHeadOfQueueAndFailureCanBeExplicitlyRequeued()
     {
@@ -131,6 +161,10 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal(-99, requeued.DestinationChatId);
     }
 
+    /// <summary>
+    /// Проверяет независимость направлений и дедупликацию с учётом исходного чата.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task IndependentDirectionsAndSourceChatIdsDoNotCollide()
     {
@@ -144,6 +178,10 @@ public sealed class BridgeTests : IDisposable
             new PollBatch(11, [new("1", -99, "C", "c")])));
     }
 
+    /// <summary>
+    /// Проверяет извлечение retry_after и отсутствие чувствительного тела ответа в исключении.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task TelegramHonorsRetryAfterWithoutExposingResponseOrToken()
     {
@@ -160,6 +198,10 @@ public sealed class BridgeTests : IDisposable
         Assert.True(SafeError.Backoff(1, error.RetryAfterSeconds).TotalSeconds >= 35);
     }
 
+    /// <summary>
+    /// Проверяет извлечение 64-разрядного идентификатора группы после миграции Telegram.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task MigrationResponseReportsInt64NewChatId()
     {
@@ -174,6 +216,10 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal(-1005369085414, error.MigratedChatId);
     }
 
+    /// <summary>
+    /// Проверяет параметры получения событий и отправки обычного текста в Telegram без режима разметки.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task TelegramPollAndSendHaveCorrectWireShapeAndPlainText()
     {
@@ -199,6 +245,10 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal(-5369085414, requests[1].Body.GetProperty("chat_id").GetInt64());
     }
 
+    /// <summary>
+    /// Проверяет заголовок авторизации MAX, передачу marker и идентификатор отправленного сообщения.
+    /// </summary>
+    /// <returns>Задача выполнения проверки.</returns>
     [Fact]
     public async Task MaxUsesAuthorizationHeaderAndPersistedMarker()
     {
@@ -220,12 +270,20 @@ public sealed class BridgeTests : IDisposable
         Assert.Equal("/messages?chat_id=-80442349966802", requests[1]);
     }
 
+    /// <summary>
+    /// Разбирает тестовый JSON и возвращает копию его корневого элемента.
+    /// </summary>
+    /// <param name="text">JSON-строка тестового сценария.</param>
+    /// <returns>Корневой элемент, доступный после освобождения JSON-документа.</returns>
     private static JsonElement Json(string text)
     {
         using JsonDocument doc = JsonDocument.Parse(text);
         return doc.RootElement.Clone();
     }
 
+    /// <summary>
+    /// Удаляет временный каталог теста вместе с файлами SQLite, если он был создан.
+    /// </summary>
     public void Dispose()
     {
         if (Directory.Exists(_directory))
