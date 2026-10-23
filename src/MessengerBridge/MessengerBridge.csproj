@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+	<LangVersion>latest</LangVersion>
     <UserSecretsId>MessengerBridge-Local-2026</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
