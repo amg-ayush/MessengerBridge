@@ -1,5 +1,5 @@
-using Microsoft.Data.Sqlite;
 using MessengerBridge.Services;
+using Microsoft.Data.Sqlite;
 
 namespace MessengerBridge.Persistence;
 
@@ -14,7 +14,9 @@ public sealed class BridgeStore : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         _connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
-            DataSource = fullPath, Pooling = false, DefaultTimeout = 10
+            DataSource = fullPath,
+            Pooling = false,
+            DefaultTimeout = 10
         }.ToString());
         _connection.Open();
         using SqliteCommand cmd = _connection.CreateCommand();
@@ -160,14 +162,26 @@ public sealed class BridgeStore : IDisposable
 
     public Task<IReadOnlyList<string>> GetStatusAsync(CancellationToken ct = default) => LockedAsync(() =>
     {
-        List<string> lines = new();
+        List<string> lines = [];
         using SqliteCommand cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT source,status,COUNT(*) FROM outbox GROUP BY source,status ORDER BY source,status";
         using (SqliteDataReader reader = cmd.ExecuteReader())
-            while (reader.Read()) lines.Add($"{reader.GetString(0)} -> {(reader.GetString(0) == "Telegram" ? "MAX" : "Telegram")}: {reader.GetString(1)}={reader.GetInt64(2)}");
+        {
+            while (reader.Read())
+            {
+                lines.Add($"{reader.GetString(0)} -> {(reader.GetString(0) == "Telegram" ? "MAX" : "Telegram")}: {reader.GetString(1)}={reader.GetInt64(2)}");
+            }
+        }
+
         cmd.CommandText = "SELECT source,value FROM cursors ORDER BY source";
         using (SqliteDataReader reader = cmd.ExecuteReader())
-            while (reader.Read()) lines.Add($"{reader.GetString(0)} cursor={reader.GetInt64(1)}");
+        {
+            while (reader.Read())
+            {
+                lines.Add($"{reader.GetString(0)} cursor={reader.GetInt64(1)}");
+            }
+        }
+
         return (IReadOnlyList<string>)lines;
     }, ct);
 

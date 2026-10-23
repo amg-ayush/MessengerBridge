@@ -26,17 +26,28 @@ public sealed class MaxClient : IMessengerClient, IDisposable
         await GetAsync("me", ct);
         JsonElement subscriptions = await GetAsync("subscriptions", ct);
         if (subscriptions.GetProperty("subscriptions").GetArrayLength() != 0)
+        {
             throw new ConfigurationException("MAX has active Webhook subscriptions. Remove them explicitly before polling.");
+        }
+
         JsonElement chat = await GetAsync($"chats/{_options.Max.ChatId}", ct);
         if (chat.Text("type") != "chat")
+        {
             throw new ConfigurationException("MAX ChatId must point to a group chat.");
+        }
+
         JsonElement member = await GetAsync($"chats/{_options.Max.ChatId}/members/me", ct);
         if (!member.TryGetProperty("is_admin", out JsonElement admin) || admin.ValueKind != JsonValueKind.True)
+        {
             throw new ConfigurationException("Make the MAX bot a group administrator.");
+        }
+
         if (!member.TryGetProperty("permissions", out JsonElement permissions) ||
             permissions.ValueKind != JsonValueKind.Array ||
             !permissions.EnumerateArray().Any(p => p.GetString() == "read_all_messages"))
+        {
             throw new ConfigurationException("Enable the MAX bot administrator permission read_all_messages.");
+        }
     }
 
     public async Task<PollBatch> PollAsync(long? cursor, CancellationToken ct)
@@ -48,7 +59,7 @@ public sealed class MaxClient : IMessengerClient, IDisposable
 
     public static PollBatch ParseUpdates(JsonElement root, long chatId)
     {
-        List<IncomingMessage> messages = new();
+        List<IncomingMessage> messages = [];
         foreach (JsonElement update in root.GetProperty("updates").EnumerateArray())
         {
             if (update.Text("update_type") != "message_created" ||
@@ -56,11 +67,19 @@ public sealed class MaxClient : IMessengerClient, IDisposable
                 !message.GetProperty("recipient").TryGetProperty("chat_id", out JsonElement recipientChat) ||
                 recipientChat.ValueKind != JsonValueKind.Number || !recipientChat.TryGetInt64(out long recipientId) ||
                 recipientId != chatId ||
-                !message.TryGetProperty("sender", out JsonElement sender) || sender.IsBot()) continue;
+                !message.TryGetProperty("sender", out JsonElement sender) || sender.IsBot())
+            {
+                continue;
+            }
+
             JsonElement body = message.GetProperty("body");
             string? text = body.Text("text");
             string? mid = body.Text("mid");
-            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(mid)) continue;
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(mid))
+            {
+                continue;
+            }
+
             messages.Add(new IncomingMessage(mid, chatId, sender.Author(), text));
         }
         long? next = root.TryGetProperty("marker", out JsonElement marker) && marker.ValueKind == JsonValueKind.Number

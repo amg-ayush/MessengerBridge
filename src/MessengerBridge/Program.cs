@@ -6,7 +6,7 @@ using MessengerBridge.Workers;
 namespace MessengerBridge;
 
 /// <summary>
-/// Ïðîãðàììà
+/// ÐŸÑ€Ð¾Ð³Ñ€Ð°Ð¼Ð¼Ð°
 /// </summary>
 public static class Program
 {
@@ -23,7 +23,8 @@ public static class Program
             // Config and data resolve beside the compiled app, independent of the current directory.
             HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
             {
-                Args = [], ContentRootPath = AppContext.BaseDirectory
+                Args = [],
+                ContentRootPath = AppContext.BaseDirectory
             });
             // Load for local dotnet run even if DOTNET_ENVIRONMENT isn't Development.
             builder.Configuration.AddUserSecrets<BridgeOptions>(optional: true).AddEnvironmentVariables();
@@ -70,8 +71,16 @@ public static class Program
             if (mode == "--status")
             {
                 IReadOnlyList<string> status = await store.GetStatusAsync();
-                foreach (string line in status) Console.WriteLine(line);
-                if (status.Count == 0) Console.WriteLine("Queue is empty; no cursors saved yet.");
+                foreach (string line in status)
+                {
+                    Console.WriteLine(line);
+                }
+
+                if (status.Count == 0)
+                {
+                    Console.WriteLine("Queue is empty; no cursors saved yet.");
+                }
+
                 return 0;
             }
             Console.WriteLine("MessengerBridge: Telegram <-> MAX. Stop with Ctrl+C.");
@@ -83,7 +92,11 @@ public static class Program
         {
             // Do not dump HTTP exception details: these can contain the Telegram token.
             Console.Error.WriteLine(ex is InvalidOperationException ? ex.Message : SafeError.Describe(ex));
-            if (ex is IOException) Console.Error.WriteLine("Check the data path and that another bridge instance isn't running.");
+            if (ex is IOException)
+            {
+                Console.Error.WriteLine("Check the data path and that another bridge instance isn't running.");
+            }
+
             return 1;
         }
     }

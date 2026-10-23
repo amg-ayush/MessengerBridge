@@ -49,18 +49,28 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                     logger.LogInformation("{Platform}: bot, group and polling checks passed.", client.Platform);
                 }
                 long? cursor = await store.GetCursorAsync(client.Platform, ct);
-                if (client.Platform == Platform.Max) cursor ??= options.InitialMaxMarker;
+                if (client.Platform == Platform.Max)
+                {
+                    cursor ??= options.InitialMaxMarker;
+                }
+
                 PollBatch batch = await client.PollAsync(cursor, ct);
                 if (client.Platform == Platform.Max && batch.NextCursor is null && batch.Messages.Count > 0)
+                {
                     throw new System.Text.Json.JsonException("MAX returned no continuation marker.");
+                }
+
                 int count = await store.SaveBatchAsync(client.Platform, destinationChatId, batch, ct);
                 failures = 0;
-                if (count > 0) logger.LogInformation("{Platform}: queued {Count} message part(s).", client.Platform, count);
+                if (count > 0)
+                {
+                    logger.LogInformation("{Platform}: queued {Count} message part(s).", client.Platform, count);
+                }
                 // Prevent busy polling if the API returns immediately (including filtered bot events).
                 await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) when (ex is ConfigurationException || ex is ApiException { Transient: false })
+            catch (Exception ex) when (ex is ConfigurationException or ApiException { Transient: false })
             {
                 StopForConfiguration(client.Platform, ex);
                 return;

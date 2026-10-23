@@ -177,7 +177,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task TelegramPollAndSendHaveCorrectWireShapeAndPlainText()
     {
-        List<(string Path, JsonElement Body)> requests = new();
+        List<(string Path, JsonElement Body)> requests = [];
         using FakeHandler handler = new(async request =>
         {
             requests.Add((request.RequestUri!.AbsolutePath,
@@ -202,7 +202,7 @@ public sealed class BridgeTests : IDisposable
     [Fact]
     public async Task MaxUsesAuthorizationHeaderAndPersistedMarker()
     {
-        List<string> requests = new();
+        List<string> requests = [];
         using FakeHandler handler = new(request =>
         {
             requests.Add(request.RequestUri!.PathAndQuery);
@@ -228,7 +228,10 @@ public sealed class BridgeTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_directory)) Directory.Delete(_directory, true);
+        if (Directory.Exists(_directory))
+        {
+            Directory.Delete(_directory, true);
+        }
     }
 
 }

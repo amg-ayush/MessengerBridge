@@ -9,10 +9,18 @@ public static class MessageFormatter
     {
         string author = string.Join(" ", message.Author.Split((char[]?)null,
             StringSplitOptions.RemoveEmptyEntries));
-        if (author.Length > 100) author = author[..SafeLength(author, 100)];
-        if (author.Length == 0) author = "Участник";
+        if (author.Length > 100)
+        {
+            author = author[..SafeLength(author, 100)];
+        }
+
+        if (author.Length == 0)
+        {
+            author = "Участник";
+        }
+
         string header = $"[{(source == Platform.Max ? "MAX" : "Telegram")}] {author}\n";
-        List<string> parts = new();
+        List<string> parts = [];
         string remaining = message.Text;
         while (remaining.Length > 0)
         {
@@ -27,7 +35,11 @@ public static class MessageFormatter
     {
         int length = Math.Min(text.Length, limit);
         if (length < text.Length && length > 0 && char.IsHighSurrogate(text[length - 1]) &&
-            char.IsLowSurrogate(text[length])) length--;
+            char.IsLowSurrogate(text[length]))
+        {
+            length--;
+        }
+
         return length;
     }
 }

@@ -14,7 +14,11 @@ public static class ApiTransport
             // Deliberate: ignore environment/system proxies when ProxyUrl is blank.
             UseProxy = !string.IsNullOrWhiteSpace(options.ProxyUrl)
         };
-        if (handler.UseProxy) handler.Proxy = new WebProxy(options.ProxyUrl);
+        if (handler.UseProxy)
+        {
+            handler.Proxy = new WebProxy(options.ProxyUrl);
+        }
+
         return new HttpClient(handler) { BaseAddress = baseAddress, Timeout = TimeSpan.FromSeconds(90) };
     }
 
@@ -27,7 +31,10 @@ public static class ApiTransport
             {
                 double? retry = response.Headers.RetryAfter?.Delta?.TotalSeconds;
                 if (retry is null && response.Headers.RetryAfter?.Date is { } date)
+                {
                     retry = Math.Max(0, (date - DateTimeOffset.UtcNow).TotalSeconds);
+                }
+
                 int? seconds = retry is { } value ? (int)Math.Ceiling(Math.Min(value, int.MaxValue)) : null;
                 long? migrate = null;
                 try
@@ -35,8 +42,15 @@ public static class ApiTransport
                     using JsonDocument error = JsonDocument.Parse(json);
                     if (error.RootElement.TryGetProperty("parameters", out JsonElement parameters))
                     {
-                        if (parameters.TryGetProperty("retry_after", out JsonElement after)) seconds = after.GetInt32();
-                        if (parameters.TryGetProperty("migrate_to_chat_id", out JsonElement id)) migrate = id.GetInt64();
+                        if (parameters.TryGetProperty("retry_after", out JsonElement after))
+                        {
+                            seconds = after.GetInt32();
+                        }
+
+                        if (parameters.TryGetProperty("migrate_to_chat_id", out JsonElement id))
+                        {
+                            migrate = id.GetInt64();
+                        }
                     }
                 }
                 catch (JsonException) { }
