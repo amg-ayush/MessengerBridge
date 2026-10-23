@@ -146,13 +146,26 @@ public sealed class BridgeWorker(TelegramClient telegram, MaxClient max, BridgeS
                 string targetId;
                 try
                 {
-                    targetId = await destination.SendAsync(item.DestinationChatId, item.Text, ct);
+                    if (item.Attachment is { } attachment)
+                    {
+                        IMessengerClient sourceClient = source == Platform.Telegram ? telegram : max;
+                        MessageAttachment prepared = await destination.PrepareAttachmentAsync(attachment, sourceClient, ct);
+                        if (prepared != attachment)
+                        {
+                            await store.SetAttachmentAsync(item.Id, prepared, ct);
+                        }
+                        targetId = await destination.SendAttachmentAsync(item.DestinationChatId, item.Text, prepared, sourceClient, ct);
+                    }
+                    else
+                    {
+                        targetId = await destination.SendAsync(item.DestinationChatId, item.Text, ct);
+                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
                 catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or
-                    ApiException or System.Text.Json.JsonException)
+                    ApiException or AttachmentException or System.Text.Json.JsonException)
                 {
-                    bool permanent = ex is ApiException { Transient: false };
+                    bool permanent = ex is AttachmentException or ApiException { Transient: false };
                     TimeSpan delay = SafeError.Backoff(item.Attempts + 1, (ex as ApiException)?.RetryAfterSeconds);
                     await store.MarkErrorAsync(item.Id, SafeError.Describe(ex), delay, permanent, ct);
                     logger.LogWarning("{Source} -> {Target}, queue #{Id}: {Reason}; {Action}.",

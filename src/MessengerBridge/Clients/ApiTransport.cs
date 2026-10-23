@@ -54,9 +54,11 @@ public static class ApiTransport
 
                 int? seconds = retry is { } value ? (int)Math.Ceiling(Math.Min(value, int.MaxValue)) : null;
                 long? migrate = null;
+                bool attachmentNotReady = false;
                 try
                 {
                     using JsonDocument error = JsonDocument.Parse(json);
+                    attachmentNotReady = error.RootElement.Text("code") == "attachment.not.ready";
                     if (error.RootElement.TryGetProperty("parameters", out JsonElement parameters))
                     {
                         if (parameters.TryGetProperty("retry_after", out JsonElement after))
@@ -71,7 +73,8 @@ public static class ApiTransport
                     }
                 }
                 catch (JsonException) { }
-                throw new ApiException((int)response.StatusCode, seconds, migrate);
+                throw new ApiException(attachmentNotReady ? 503 : (int)response.StatusCode,
+                    attachmentNotReady ? seconds ?? 3 : seconds, migrate);
             }
             using JsonDocument doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone();

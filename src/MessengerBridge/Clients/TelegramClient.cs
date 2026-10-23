@@ -1,12 +1,14 @@
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MessengerBridge.Configuration;
+using MessengerBridge.Services;
 
 namespace MessengerBridge.Clients;
 
 /// <summary>
-/// Клиент API Telegram для проверки бота, long polling и отправки текстовых сообщений.
+/// Клиент API Telegram для проверки бота, long polling, сообщений и медиафайлов.
 /// </summary>
 /// <param name="http">HTTP-клиент с настроенным базовым адресом и прокси; освобождается вместе с клиентом мессенджера.</param>
 /// <param name="options">Настройки подключения, исходной группы и long polling.</param>
@@ -76,7 +78,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
     }
 
     /// <summary>
-    /// Получает события Telegram и отбирает текстовые сообщения пользователей настроенной группы.
+    /// Получает события Telegram и отбирает сообщения пользователей настроенной группы, включая вложения.
     /// </summary>
     /// <param name="cursor">Следующий offset Telegram либо marker MAX; null означает начальный запрос.</param>
     /// <param name="ct">Токен отмены операции.</param>
@@ -94,7 +96,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
     }
 
     /// <summary>
-    /// Разбирает события Telegram, пропуская ботов, другие чаты, анонимных отправителей и нетекстовые сообщения.
+    /// Разбирает текст, подписи и вложения Telegram, пропуская ботов, другие чаты и анонимных отправителей.
     /// </summary>
     /// <param name="updates">Массив событий из поля result ответа getUpdates.</param>
     /// <param name="chatId">Идентификатор исходной Telegram-группы.</param>
@@ -126,15 +128,16 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
                 continue;
             }
 
-            string? text = message.Text("text");
-            if (string.IsNullOrWhiteSpace(text))
+            string text = MessageContent.TelegramText(message);
+            MessageAttachment[] attachments = [.. MessageContent.TelegramAttachments(message).Where(a => !string.IsNullOrWhiteSpace(a.FileId))];
+            if (string.IsNullOrWhiteSpace(text) && attachments.Length == 0)
             {
                 continue;
             }
 
             messages.Add(new IncomingMessage(
                 message.GetProperty("message_id").GetInt64().ToString(CultureInfo.InvariantCulture),
-                chatId, sender.Author(), text));
+                chatId, sender.Author(), text, attachments));
         }
         return new PollBatch(next, messages);
     }
@@ -151,8 +154,7 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
         JsonElement message = await CallAsync("sendMessage", new
         {
             chat_id = chatId,
-            text,
-            link_preview_options = new { is_disabled = true }
+            text
         }, ct);
         return message.GetProperty("message_id").GetInt64().ToString(CultureInfo.InvariantCulture);
     }
@@ -161,4 +163,77 @@ public sealed class TelegramClient(HttpClient http, BridgeOptions options) : IMe
     /// Освобождает HTTP-клиент и принадлежащий ему обработчик запросов.
     /// </summary>
     public void Dispose() => http.Dispose();
+
+    /// <summary>Получает свежую ссылку getFile и скачивает исходный файл через прокси Telegram.</summary>
+    /// <param name="attachment">Описание исходного файла.</param>
+    /// <param name="ct">Токен отмены.</param>
+    /// <returns>Временный файл для загрузки в MAX.</returns>
+    /// <exception cref="AttachmentException">Размер превышает предел скачивания Telegram или файл недоступен.</exception>
+    public async Task<MediaFile> DownloadAsync(MessageAttachment attachment, CancellationToken ct)
+    {
+        if (attachment.Size > 20L * 1024 * 1024)
+        {
+            throw new AttachmentException("Облачный Telegram Bot API позволяет скачивать файлы размером не более 20 МиБ.");
+        }
+        JsonElement file = await CallAsync("getFile", new { file_id = attachment.FileId }, ct);
+        string path = file.Text("file_path") ?? throw new AttachmentException("Telegram не предоставил путь к файлу.");
+        string escaped = string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+        string url = new Uri(http.BaseAddress!, $"file/bot{options.Telegram.Token}/{escaped}").AbsoluteUri;
+        return await MediaTransfer.DownloadAsync(http, url, attachment, ct);
+    }
+
+    /// <summary>Оставляет исходное описание: Telegram загружает файл непосредственно при отправке.</summary>
+    /// <param name="attachment">Описание файла.</param>
+    /// <param name="source">Клиент исходной платформы.</param>
+    /// <param name="ct">Токен отмены.</param>
+    /// <returns>Исходное описание файла.</returns>
+    public Task<MessageAttachment> PrepareAttachmentAsync(MessageAttachment attachment, IMessengerClient source, CancellationToken ct) =>
+        Task.FromResult(attachment);
+
+    /// <summary>Скачивает файл MAX и отправляет multipart-запрос с подписью в Telegram.</summary>
+    /// <param name="chatId">Идентификатор группы Telegram.</param>
+    /// <param name="text">Подпись с автором и источником.</param>
+    /// <param name="attachment">Описание исходного файла.</param>
+    /// <param name="source">Клиент MAX для скачивания файла.</param>
+    /// <param name="ct">Токен отмены.</param>
+    /// <returns>Идентификатор отправленного сообщения.</returns>
+    public async Task<string> SendAttachmentAsync(long chatId, string text, MessageAttachment attachment,
+        IMessengerClient source, CancellationToken ct)
+    {
+        using MediaFile file = await source.DownloadAsync(attachment, ct);
+        string field = attachment.Type switch
+        {
+            "image" when file.Content.Length <= 10L * 1024 * 1024 &&
+                !new[] { ".heic", ".tif", ".tiff", ".bmp" }.Contains(Path.GetExtension(file.FileName).ToLowerInvariant()) => "photo",
+            "video" when !new[] { ".webm", ".mkv", ".mov" }.Contains(Path.GetExtension(file.FileName).ToLowerInvariant()) => "video",
+            "audio" when file.ContentType.StartsWith("audio/ogg", StringComparison.OrdinalIgnoreCase) ||
+                new[] { ".ogg", ".opus" }.Contains(Path.GetExtension(file.FileName).ToLowerInvariant()) => "voice",
+            "audio" when Path.GetExtension(file.FileName).ToLowerInvariant() is ".mp3" or ".m4a" => "audio",
+            "voice" => "voice",
+            "animation" => "animation",
+            _ => "document"
+        };
+        string method = field switch
+        {
+            "photo" => "sendPhoto",
+            "video" => "sendVideo",
+            "audio" => "sendAudio",
+            "voice" => "sendVoice",
+            "animation" => "sendAnimation",
+            _ => "sendDocument"
+        };
+        using MultipartFormDataContent form = new();
+        form.Add(new StringContent(chatId.ToString(CultureInfo.InvariantCulture)), "chat_id");
+        form.Add(new StringContent(text), "caption");
+        StreamContent content = new(file.Content);
+        content.Headers.ContentType = MediaTypeHeaderValue.TryParse(file.ContentType, out MediaTypeHeaderValue? mime)
+            ? mime : new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(content, field, file.FileName);
+        JsonElement root = await ApiTransport.ReadAsync(await http.PostAsync(Method(method), form, ct), ct);
+        if (!root.GetProperty("ok").GetBoolean())
+        {
+            throw new ApiException(root.TryGetProperty("error_code", out JsonElement code) ? code.GetInt32() : 500);
+        }
+        return root.GetProperty("result").GetProperty("message_id").GetInt64().ToString(CultureInfo.InvariantCulture);
+    }
 }

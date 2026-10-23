@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MessengerBridge.Services;
 using Microsoft.Data.Sqlite;
 
@@ -60,6 +61,21 @@ public sealed class BridgeStore : IDisposable
             CREATE INDEX IF NOT EXISTS ix_outbox_pending ON outbox(source, status, id);
             """;
         cmd.ExecuteNonQuery();
+        // Existing databases retain cursors, delivery history and pending text messages.
+        cmd.CommandText = "PRAGMA table_info(outbox)";
+        bool hasAttachment = false;
+        using (SqliteDataReader reader = cmd.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                hasAttachment |= reader.GetString(1) == "attachment";
+            }
+        }
+        if (!hasAttachment)
+        {
+            cmd.CommandText = "ALTER TABLE outbox ADD COLUMN attachment TEXT";
+            cmd.ExecuteNonQuery();
+        }
     }
 
     /// <summary>
@@ -108,21 +124,28 @@ public sealed class BridgeStore : IDisposable
         foreach (IncomingMessage message in batch.Messages)
         {
             IReadOnlyList<string> parts = MessageFormatter.Format(source, message);
-            for (int part = 0; part < parts.Count; part++)
+            IReadOnlyList<MessageAttachment> attachments = message.Attachments ?? [];
+            int total = parts.Count + Math.Max(0, attachments.Count - 1);
+            for (int part = 0; part < total; part++)
             {
+                MessageAttachment? attachment = part == 0 ? attachments.FirstOrDefault() :
+                    part >= parts.Count ? attachments[part - parts.Count + 1] : null;
+                string text = part < parts.Count ? parts[part] :
+                    MessageFormatter.Format(source, message with { Text = "", Attachments = [attachment!] })[0];
                 using SqliteCommand cmd = _connection.CreateCommand();
                 cmd.Transaction = transaction;
                 cmd.CommandText = """
                     INSERT OR IGNORE INTO outbox
-                        (source,source_chat_id,source_message_id,part,destination_chat_id,text)
-                    VALUES ($source,$chat,$message,$part,$destination,$text)
+                        (source,source_chat_id,source_message_id,part,destination_chat_id,text,attachment)
+                    VALUES ($source,$chat,$message,$part,$destination,$text,$attachment)
                     """;
                 cmd.Parameters.AddWithValue("$source", source.ToString());
                 cmd.Parameters.AddWithValue("$chat", message.SourceChatId);
                 cmd.Parameters.AddWithValue("$message", message.SourceId);
                 cmd.Parameters.AddWithValue("$part", part);
                 cmd.Parameters.AddWithValue("$destination", destinationChatId);
-                cmd.Parameters.AddWithValue("$text", parts[part]);
+                cmd.Parameters.AddWithValue("$text", text);
+                cmd.Parameters.AddWithValue("$attachment", attachment is null ? DBNull.Value : JsonSerializer.Serialize(attachment));
                 inserted += cmd.ExecuteNonQuery();
             }
         }
@@ -153,13 +176,28 @@ public sealed class BridgeStore : IDisposable
     {
         using SqliteCommand cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            SELECT id,destination_chat_id,text,attempts,next_attempt_at
+            SELECT id,destination_chat_id,text,attempts,next_attempt_at,attachment
             FROM outbox WHERE source=$source AND status='pending' ORDER BY id LIMIT 1
             """;
         cmd.Parameters.AddWithValue("$source", source.ToString());
         using SqliteDataReader reader = cmd.ExecuteReader();
         return reader.Read() ? new OutboxItem(reader.GetInt64(0), source, reader.GetInt64(1),
-            reader.GetString(2), reader.GetInt32(3), reader.GetInt64(4)) : null;
+            reader.GetString(2), reader.GetInt32(3), reader.GetInt64(4),
+            reader.IsDBNull(5) ? null : JsonSerializer.Deserialize<MessageAttachment>(reader.GetString(5))) : null;
+    }, ct);
+
+    /// <summary>Сохраняет токен загрузки до попытки отправить сообщение с вложением.</summary>
+    /// <param name="id">Идентификатор записи очереди.</param>
+    /// <param name="attachment">Подготовленное вложение.</param>
+    /// <param name="ct">Токен отмены.</param>
+    /// <returns>Число обновлённых записей.</returns>
+    public Task<int> SetAttachmentAsync(long id, MessageAttachment attachment, CancellationToken ct = default) => LockedAsync(() =>
+    {
+        using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = "UPDATE outbox SET attachment=$attachment WHERE id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.AddWithValue("$attachment", JsonSerializer.Serialize(attachment));
+        return cmd.ExecuteNonQuery();
     }, ct);
 
     /// <summary>

@@ -9,5 +9,6 @@ namespace MessengerBridge;
 /// <param name="Text">Готовый к отправке текст с заголовком автора.</param>
 /// <param name="Attempts">Количество зарегистрированных неудачных попыток отправки.</param>
 /// <param name="NextAttemptAt">Самое раннее время повторной отправки в миллисекундах Unix; 0 разрешает отправку сразу.</param>
+/// <param name="Attachment">Отдельное вложение с сохранённым состоянием подготовки либо null.</param>
 public sealed record OutboxItem(long Id, Platform Source, long DestinationChatId, string Text,
-    int Attempts, long NextAttemptAt);
+    int Attempts, long NextAttemptAt, MessageAttachment? Attachment = null);

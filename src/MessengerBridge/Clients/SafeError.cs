@@ -16,6 +16,7 @@ public static class SafeError
             $"Ошибка API: {api.Status}; группа Telegram преобразована в супергруппу, задайте ChatId={id} (см. README)",
         ApiException api => $"Ошибка API: {api.Status}",
         ConfigurationException config => config.Message,
+        AttachmentException attachment => attachment.Message,
         HttpRequestException { HttpRequestError: HttpRequestError.SecureConnectionError } =>
             "Ошибка проверки TLS; проверьте цепочку сертификатов (для MAX см. README)",
         HttpRequestException http => $"Ошибка сети: {http.HttpRequestError}",

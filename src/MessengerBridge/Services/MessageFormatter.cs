@@ -16,7 +16,7 @@ public static class MessageFormatter
     /// </summary>
     /// <param name="source">Платформа, из которой получено сообщение.</param>
     /// <param name="message">Исходное сообщение с именем автора и текстом.</param>
-    /// <returns>Упорядоченные части длиной не более MaxLength; пустой список для пустого текста.</returns>
+    /// <returns>Части до MaxLength для текста или до 1000 символов для медиа; для файла без подписи возвращается заголовок.</returns>
     /// <remarks>Имя автора нормализуется и ограничивается 100 кодовыми единицами UTF-16. Заголовок повторяется в каждой части; границы графем не гарантируются.</remarks>
     public static IReadOnlyList<string> Format(Platform source, IncomingMessage message)
     {
@@ -33,11 +33,17 @@ public static class MessageFormatter
         }
 
         string header = $"[{(source == Platform.Max ? "MAX" : "Telegram")}] {author}\n";
+        bool hasMedia = message.Attachments is { Count: > 0 };
+        int limit = hasMedia ? 1000 : MaxLength;
         List<string> parts = [];
         string remaining = message.Text;
+        if (remaining.Length == 0 && hasMedia)
+        {
+            parts.Add(header.TrimEnd());
+        }
         while (remaining.Length > 0)
         {
-            int length = SafeLength(remaining, MaxLength - header.Length);
+            int length = SafeLength(remaining, limit - header.Length);
             parts.Add(header + remaining[..length]);
             remaining = remaining[length..];
         }
