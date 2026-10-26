@@ -48,7 +48,7 @@ public static class Program
                 console.TimestampFormat = "HH:mm:ss ";
             });
             builder.Services.AddSingleton(options);
-            builder.Services.AddSingleton(_ => new BridgeStore(options.DatabasePath));
+            builder.Services.AddSingleton(_ => new BridgeStore(options.DatabasePath, options.HeaderIcon));
             // No IHttpClientFactory logging: Telegram's token is part of its URL.
             builder.Services.AddSingleton(_ => new TelegramClient(ApiTransport.Create(options.Telegram,
                 new Uri("https://api.telegram.org/")), options));

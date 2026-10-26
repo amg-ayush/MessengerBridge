@@ -18,13 +18,19 @@ public sealed class BridgeStore : IDisposable
     /// Синхронизирует доступ параллельных обработчиков к соединению.
     /// </summary>
     private readonly SemaphoreSlim _gate = new(1);
+    /// <summary>
+    /// Значок в начале заголовка сообщений, которые ставятся в очередь.
+    /// </summary>
+    private readonly string _headerIcon;
 
     /// <summary>
     /// Открывает SQLite-базу, создаёт каталог и таблицы, включает WAL и полную синхронизацию записи.
     /// </summary>
     /// <param name="path">Путь к файлу базы данных.</param>
-    public BridgeStore(string path)
+    /// <param name="headerIcon">Значок в начале заголовка; пустая строка убирает значок.</param>
+    public BridgeStore(string path, string headerIcon = MessageFormatter.DefaultIcon)
     {
+        _headerIcon = headerIcon;
         string fullPath = Path.GetFullPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         _connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -123,7 +129,7 @@ public sealed class BridgeStore : IDisposable
         int inserted = 0;
         foreach (IncomingMessage message in batch.Messages)
         {
-            IReadOnlyList<string> parts = MessageFormatter.Format(source, message);
+            IReadOnlyList<string> parts = MessageFormatter.Format(source, message, _headerIcon);
             IReadOnlyList<MessageAttachment> attachments = message.Attachments ?? [];
             int total = parts.Count + Math.Max(0, attachments.Count - 1);
             for (int part = 0; part < total; part++)
@@ -131,7 +137,7 @@ public sealed class BridgeStore : IDisposable
                 MessageAttachment? attachment = part == 0 ? attachments.FirstOrDefault() :
                     part >= parts.Count ? attachments[part - parts.Count + 1] : null;
                 string text = part < parts.Count ? parts[part] :
-                    MessageFormatter.Format(source, message with { Text = "", Attachments = [attachment!] })[0];
+                    MessageFormatter.Format(source, message with { Text = "", Attachments = [attachment!] }, _headerIcon)[0];
                 using SqliteCommand cmd = _connection.CreateCommand();
                 cmd.Transaction = transaction;
                 cmd.CommandText = """

@@ -74,7 +74,7 @@ public sealed class BridgeTests : IDisposable
     {
         string text = string.Concat(Enumerable.Repeat("Пепси 🐈‍⬛ ", 2000));
         IReadOnlyList<string> parts = MessageFormatter.Format(Platform.Max, new("mid", -1, "Amgalan", text));
-        const string header = "[MAX] Amgalan\n";
+        const string header = "🎃 Amgalan из МАХ\n\n";
         Assert.True(parts.Count > 1);
         Assert.Equal(text, string.Concat(parts.Select(p => p[header.Length..])));
         foreach (string part in parts)
@@ -82,6 +82,36 @@ public sealed class BridgeTests : IDisposable
             Assert.InRange(part.Length, 1, MessageFormatter.MaxLength);
             _ = new UTF8Encoding(false, true).GetBytes(part);
         }
+    }
+
+    /// <summary>
+    /// Проверяет замену значка заголовка и его отключение пустой строкой.
+    /// </summary>
+    /// <param name="icon">Значок из настроек.</param>
+    /// <param name="expected">Ожидаемый текст с заголовком.</param>
+    [Theory]
+    [InlineData("👻", "👻 Анна из Телеграм\n\nПривет")]
+    [InlineData(" ⭐ ", "⭐ Анна из Телеграм\n\nПривет")]
+    [InlineData("", "Анна из Телеграм\n\nПривет")]
+    public void HeaderIconIsConfigurable(string icon, string expected)
+    {
+        IReadOnlyList<string> parts = MessageFormatter.Format(Platform.Telegram, new("mid", -1, "Анна", "Привет"), icon);
+        Assert.Equal(expected, Assert.Single(parts));
+    }
+
+    /// <summary>
+    /// Проверяет, что слишком длинный значок заголовка отклоняется при проверке настроек.
+    /// </summary>
+    [Fact]
+    public void TooLongHeaderIconIsRejected()
+    {
+        BridgeOptions options = new()
+        {
+            Telegram = new EndpointOptions { ChatId = -1 },
+            Max = new EndpointOptions { ChatId = -2 },
+            HeaderIcon = new string('*', MessageFormatter.MaxIconLength + 1)
+        };
+        Assert.Throws<InvalidOperationException>(() => options.Validate(requireTokens: false));
     }
 
     /// <summary>

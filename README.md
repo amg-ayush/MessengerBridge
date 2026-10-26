@@ -130,7 +130,13 @@ Bridge__Max__ChatId
 Bridge__Telegram__ProxyUrl
 Bridge__Max__ProxyUrl
 Bridge__DatabasePath
+Bridge__HeaderIcon
 ```
+
+`Bridge:HeaderIcon` — значок в начале заголовка пересылаемого сообщения
+(по умолчанию `🎃`). Пустая строка убирает значок. Заголовок формируется при
+постановке в очередь, поэтому новый значок применяется к сообщениям, полученным
+после перезапуска.
 
 `ChatId` и курсоры хранятся как `long` / SQLite INTEGER. 32-битного `int` недостаточно.
 

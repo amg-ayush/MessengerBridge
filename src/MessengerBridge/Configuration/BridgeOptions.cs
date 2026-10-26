@@ -1,3 +1,5 @@
+using MessengerBridge.Services;
+
 namespace MessengerBridge.Configuration;
 
 /// <summary>
@@ -30,6 +32,10 @@ public sealed class BridgeOptions
     /// Минимальная пауза между отправками в одном направлении, не менее 3100 миллисекунд.
     /// </summary>
     public int SendIntervalMilliseconds { get; set; } = 3100;
+    /// <summary>
+    /// Значок в начале заголовка пересылаемых сообщений; пустая строка убирает значок.
+    /// </summary>
+    public string HeaderIcon { get; set; } = MessageFormatter.DefaultIcon;
 
     /// <summary>
     /// Проверяет допустимость общих настроек и параметров обоих мессенджеров.
@@ -56,6 +62,12 @@ public sealed class BridgeOptions
         if (InitialMaxMarker < 0)
         {
             throw new InvalidOperationException("Bridge:InitialMaxMarker должен быть неотрицательным числом или null.");
+        }
+
+        if (HeaderIcon is null || HeaderIcon.Trim().Length > MessageFormatter.MaxIconLength)
+        {
+            throw new InvalidOperationException(
+                $"Bridge:HeaderIcon должен быть не длиннее {MessageFormatter.MaxIconLength} символов; пустая строка убирает значок.");
         }
 
         ValidateEndpoint(Telegram, "Telegram", requireTokens);

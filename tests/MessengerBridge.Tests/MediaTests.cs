@@ -36,7 +36,7 @@ public sealed class MediaTests
         Assert.Equal(123, photo.Size);
         Assert.Equal("Сайт\nhttps://example.com/a", batch.Messages[1].Text);
         Assert.Equal("report.pdf", Assert.Single(batch.Messages[1].Attachments!).FileName);
-        Assert.Equal("[Telegram] Анна", Assert.Single(MessageFormatter.Format(Platform.Telegram, batch.Messages[0])));
+        Assert.Equal("🎃 Анна из Телеграм", Assert.Single(MessageFormatter.Format(Platform.Telegram, batch.Messages[0])));
     }
 
     /// <summary>Проверяет типы Telegram, которые раньше отбрасывались вместе с сообщением.</summary>
@@ -133,7 +133,7 @@ public sealed class MediaTests
             using (BridgeStore store = new(path))
             {
                 OutboxItem old = (await store.GetNextAsync(Platform.Telegram))!;
-                Assert.Equal("[Telegram] A\nold text", old.Text);
+                Assert.Equal("🎃 A из Телеграм\n\nold text", old.Text);
                 Assert.Null(old.Attachment);
                 await store.MarkSentAsync(old.Id, "old-target");
                 Assert.Equal(4, await store.SaveBatchAsync(Platform.Telegram, -2, media));
@@ -154,13 +154,13 @@ public sealed class MediaTests
                 for (int i = 0; i < 3; i++)
                 {
                     OutboxItem item = (await store.GetNextAsync(Platform.Telegram))!;
-                    combined.Append(item.Text["[Telegram] A\n".Length..]);
+                    combined.Append(item.Text["🎃 A из Телеграм\n\n".Length..]);
                     await store.MarkSentAsync(item.Id, "target-" + i);
                 }
                 Assert.Equal(media.Messages[0].Text, combined.ToString());
                 OutboxItem secondFile = (await store.GetNextAsync(Platform.Telegram))!;
                 Assert.Equal("document", secondFile.Attachment!.FileId);
-                Assert.Equal("[Telegram] A", secondFile.Text);
+                Assert.Equal("🎃 A из Телеграм", secondFile.Text);
                 await store.MarkSentAsync(secondFile.Id, "document-target");
                 Assert.Null(await store.GetNextAsync(Platform.Telegram));
             }

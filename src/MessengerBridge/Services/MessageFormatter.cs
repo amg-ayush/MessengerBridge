@@ -12,13 +12,25 @@ public static class MessageFormatter
     public const int MaxLength = 3500;
 
     /// <summary>
+    /// Значок в начале заголовка, если в настройках не задан другой.
+    /// </summary>
+    public const string DefaultIcon = "🎃";
+
+    /// <summary>
+    /// Максимальная длина значка заголовка в кодовых единицах UTF-16.
+    /// </summary>
+    public const int MaxIconLength = 32;
+
+    /// <summary>
     /// Формирует части сообщения с заголовком автора без разрыва суррогатных пар UTF-16.
     /// </summary>
     /// <param name="source">Платформа, из которой получено сообщение.</param>
     /// <param name="message">Исходное сообщение с именем автора и текстом.</param>
+    /// <param name="icon">Значок в начале заголовка; пустая строка убирает значок.</param>
     /// <returns>Части до MaxLength для текста или до 1000 символов для медиа; для файла без подписи возвращается заголовок.</returns>
     /// <remarks>Имя автора нормализуется и ограничивается 100 кодовыми единицами UTF-16. Заголовок повторяется в каждой части; границы графем не гарантируются.</remarks>
-    public static IReadOnlyList<string> Format(Platform source, IncomingMessage message)
+    public static IReadOnlyList<string> Format(Platform source, IncomingMessage message,
+        string icon = DefaultIcon)
     {
         string author = string.Join(" ", message.Author.Split((char[]?)null,
             StringSplitOptions.RemoveEmptyEntries));
@@ -32,7 +44,9 @@ public static class MessageFormatter
             author = "Участник";
         }
 
-        string header = $"🎃 {author} из {(source == Platform.Max ? "МАХ" : "Телеграм")}\n\n";
+        icon = icon.Trim();
+        string prefix = icon.Length > 0 ? icon + " " : "";
+        string header = $"{prefix}{author} из {(source == Platform.Max ? "МАХ" : "Телеграм")}\n\n";
         bool hasMedia = message.Attachments is { Count: > 0 };
         int limit = hasMedia ? 1000 : MaxLength;
         List<string> parts = [];
