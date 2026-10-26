@@ -32,7 +32,7 @@ public static class MessageFormatter
             author = "Участник";
         }
 
-        string header = $"[{(source == Platform.Max ? "MAX" : "Telegram")}] {author}\n";
+        string header = $"[{(source == Platform.Max ? "MAX" : "Telegram")}] {author}\n\n";
         bool hasMedia = message.Attachments is { Count: > 0 };
         int limit = hasMedia ? 1000 : MaxLength;
         List<string> parts = [];
